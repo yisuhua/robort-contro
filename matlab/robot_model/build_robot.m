@@ -145,7 +145,7 @@ disp(pJ3.');
 
 %% 7. 显示两种姿态
 figure('Name','六轴机械臂：零位','Color','w');
-show(robot,q0,'Frames','all','Visuals','on');
+show(robot,q0,'Frames','on','Visuals','on');
 axis equal;
 grid on;
 xlabel('X (m)'); ylabel('Y (m)'); zlabel('Z (m)');
@@ -153,7 +153,7 @@ title('六轴简化机构：零位');
 view(35,25);
 
 figure('Name','六轴机械臂：J3 -90 deg','Color','w');
-show(robot,qJ3,'Frames','all','Visuals','on');
+show(robot,qJ3,'Frames','on','Visuals','on');
 axis equal;
 grid on;
 xlabel('X (m)'); ylabel('Y (m)'); zlabel('Z (m)');
