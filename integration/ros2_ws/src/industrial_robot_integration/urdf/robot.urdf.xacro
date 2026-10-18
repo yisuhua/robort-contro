@@ -1,0 +1,126 @@
+<?xml version="1.0"?>
+<robot name="industrial_robot_6r" xmlns:xacro="http://www.ros.org/wiki/xacro">
+  <!-- PROPOSED adapter for unchanged MATLAB Stage 1-2 kinematic geometry.
+       These five scalar dimensions and six axes must match build_robot.m.
+       Do not promote this URDF to CAD VALID until independent cross-tool checks.
+  -->
+  <xacro:arg name="demo_mode" default="false"/>
+  <xacro:arg name="controller_yaml" default=""/>
+  <xacro:property name="d1" value="0.320"/>
+  <xacro:property name="a1" value="0.080"/>
+  <xacro:property name="L2" value="0.350"/>
+  <xacro:property name="L3" value="0.340"/>
+  <xacro:property name="L4" value="0.130"/>
+  <xacro:property name="j1limit" value="2.9670597283903604"/>
+
+  <!-- Demo-only placeholder mass/inertia and artificial surfaces:
+       NOT actual CAD mass, FEA collision, velocity or torque limits. -->
+  <xacro:macro name="demo_inertial" params="mass">
+    <xacro:if value="$(arg demo_mode)">
+      <inertial>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <mass value="${mass}"/>
+        <inertia ixx="0.02" ixy="0" ixz="0" iyy="0.02" iyz="0" izz="0.02"/>
+      </inertial>
+    </xacro:if>
+  </xacro:macro>
+  <xacro:macro name="demo_visual" params="length">
+    <visual>
+      <origin xyz="${length/2} 0 0" rpy="0 0 0"/>
+      <geometry><box size="${length} 0.04 0.04"/></geometry>
+      <material name="robot_gray"><color rgba="0.45 0.55 0.68 1"/></material>
+    </visual>
+    <xacro:if value="$(arg demo_mode)">
+      <collision>
+        <origin xyz="${length/2} 0 0" rpy="0 0 0"/>
+        <geometry><box size="${length} 0.04 0.04"/></geometry>
+      </collision>
+    </xacro:if>
+  </xacro:macro>
+
+  <link name="world"/>
+  <link name="base_link"/>
+  <joint name="world_to_base" type="fixed">
+    <parent link="world"/><child link="base_link"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+  </joint>
+
+  <link name="link1"><xacro:demo_inertial mass="1.0"/></link>
+  <joint name="joint1" type="revolute">
+    <parent link="base_link"/><child link="link1"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/><axis xyz="0 0 1"/>
+    <!-- Only J1 ±170° is confirmed; effort/velocity are demo placeholders. -->
+    <limit lower="-${j1limit}" upper="${j1limit}" effort="50" velocity="1.0"/>
+  </joint>
+  <link name="link2">
+    <xacro:demo_inertial mass="1.0"/>
+    <xacro:demo_visual length="${L2}"/>
+  </link>
+  <joint name="joint2" type="continuous">
+    <parent link="link1"/><child link="link2"/>
+    <origin xyz="${a1} 0 ${d1}" rpy="0 0 0"/><axis xyz="0 1 0"/>
+    <!-- No real J2 mechanical limits are known. -->
+    <limit effort="50" velocity="1.0"/>
+  </joint>
+  <link name="link3">
+    <xacro:demo_inertial mass="1.0"/>
+    <xacro:demo_visual length="${L3}"/>
+  </link>
+  <joint name="joint3" type="continuous">
+    <parent link="link2"/><child link="link3"/>
+    <origin xyz="${L2} 0 0" rpy="0 0 0"/><axis xyz="0 1 0"/>
+    <limit effort="50" velocity="1.0"/>
+  </joint>
+  <link name="link4"><xacro:demo_inertial mass="1.0"/></link>
+  <joint name="joint4" type="continuous">
+    <parent link="link3"/><child link="link4"/>
+    <origin xyz="${L3} 0 0" rpy="0 0 0"/><axis xyz="1 0 0"/>
+    <limit effort="50" velocity="1.0"/>
+  </joint>
+  <link name="link5"><xacro:demo_inertial mass="1.0"/></link>
+  <joint name="joint5" type="continuous">
+    <parent link="link4"/><child link="link5"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/><axis xyz="0 1 0"/>
+    <limit effort="50" velocity="1.0"/>
+  </joint>
+  <link name="link6"><xacro:demo_inertial mass="1.0"/></link>
+  <joint name="joint6" type="continuous">
+    <parent link="link5"/><child link="link6"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/><axis xyz="1 0 0"/>
+    <limit effort="50" velocity="1.0"/>
+  </joint>
+  <link name="tool_flange">
+    <xacro:demo_inertial mass="0.2"/>
+    <visual><geometry><box size="0.012 0.09 0.09"/></geometry></visual>
+  </link>
+  <joint name="tool_fixed" type="fixed">
+    <parent link="link6"/><child link="tool_flange"/>
+    <origin xyz="${L4} 0 0" rpy="0 0 0"/>
+  </joint>
+
+  <xacro:if value="$(arg demo_mode)">
+    <ros2_control name="GazeboSimSystem" type="system">
+      <hardware><plugin>gz_ros2_control/GazeboSimSystem</plugin></hardware>
+      <xacro:macro name="demo_joint_interface" params="name">
+        <joint name="${name}">
+          <command_interface name="position"/>
+          <state_interface name="position"><param name="initial_value">0.0</param></state_interface>
+          <state_interface name="velocity"/>
+        </joint>
+      </xacro:macro>
+      <xacro:demo_joint_interface name="joint1"/>
+      <xacro:demo_joint_interface name="joint2"/>
+      <xacro:demo_joint_interface name="joint3"/>
+      <xacro:demo_joint_interface name="joint4"/>
+      <xacro:demo_joint_interface name="joint5"/>
+      <xacro:demo_joint_interface name="joint6"/>
+    </ros2_control>
+    <gazebo>
+      <plugin filename="libgz_ros2_control-system.so" name="gz_ros2_control::GazeboSimROS2ControlPlugin">
+        <robot_param>robot_description</robot_param>
+        <robot_param_node>robot_state_publisher</robot_param_node>
+        <parameters>$(arg controller_yaml)</parameters>
+      </plugin>
+    </gazebo>
+  </xacro:if>
+</robot>
