@@ -60,10 +60,33 @@ jobs:
           $entries = [System.IO.Compression.ZipFile]::OpenRead((Resolve-Path handoff/exports/LATEST.zip).Path)
           try {
             $names = @($entries.Entries | ForEach-Object Name)
-            if ($names -notcontains 'LATEST.md' -or $names -notcontains 'LATEST.json' -or $names.Count -ne 2) {
+            if ($names -notcontains 'LATEST.md' -or $names -notcontains 'LATEST.json' -or
+                $names -notcontains 'FILES.md' -or $names -notcontains 'MANIFEST.json' -or
+                $names -notcontains 'build_robot.m' -or
+                $names -notcontains 'robot.urdf.xacro' -or
+                $names -notcontains 'failure-excerpts.txt') {
               throw "Handoff ZIP content contract failed: $names"
             }
           } finally { $entries.Dispose() }
+          $staging = Join-Path $env:RUNNER_TEMP 'handoff-check'
+          New-Item -ItemType Directory -Path $staging -Force | Out-Null
+          try {
+            Expand-Archive -LiteralPath handoff/exports/LATEST.zip -DestinationPath $staging -Force
+            $manifest = Get-Content -LiteralPath (Join-Path $staging 'MANIFEST.json') -Raw | ConvertFrom-Json
+            if ($manifest.git_sha -ne $j.git_sha -or $manifest.source_count -lt 10) {
+              throw "Handoff manifest version/source contract mismatch"
+            }
+            $model = Join-Path $staging 'sources/matlab/robot_model/build_robot.m'
+            if (!(Test-Path -LiteralPath $model)) { throw "Required MATLAB model absent from package" }
+            if ((Get-FileHash $model -Algorithm SHA256).Hash -ne
+                (Get-FileHash matlab/robot_model/build_robot.m -Algorithm SHA256).Hash) {
+              throw "Bundled model does not match the current repository input"
+            }
+            $packagedNames = @(Get-ChildItem $staging -File -Recurse | ForEach-Object Name)
+            if ($packagedNames -contains '.env' -or $packagedNames -contains '.git') {
+              throw 'Forbidden private data included in package'
+            }
+          } finally { Remove-Item $staging -Recurse -Force -ErrorAction SilentlyContinue }
           $dirty = @(git status --porcelain)
           if ($dirty.Count -gt 0) { throw "Generated handoffs must not dirty git: $dirty" }
       - uses: actions/upload-artifact@v4

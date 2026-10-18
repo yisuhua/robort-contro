@@ -26,3 +26,19 @@
 
 **重要**：每次测试仅自动刷新交付文件，不会自动分析实验结果生成研究结论，
 不会执行未授权的重复实验，不会合并 main 或重写以前的 Latest Valid。
+
+## 交付内容规则（v2）
+- `exports/LATEST.zip` 固定包含 `LATEST.md`、`LATEST.json`、
+  `FILES.md`、`MANIFEST.json`、`sources/` 关键运动学与 ROS2/Gazebo
+  源码配置、`diagnostics/failure-excerpts.txt`。在 WSL 生成相应产物时，
+  `evidence/wsl/` 还包括本次 `status.tsv`、`inventory.txt`、
+  `kinematic.urdf`、`demo.urdf`、`demo.sdf` 等小文件。
+- 软件包从**当前 Git 工作区**复制代码（可能含未提交修改），
+  `MANIFEST.json` 单独记录 `git_sha` 作为版本线索而非代码一致性证明。
+- 源文件每个最多 512 KiB，生成文件每个最多 1 MiB，失败摘录最多
+  40000 字符；超限或缺失列入 Manifest，原始文件仍保留在本地。
+- `inbox/` 适合手动追加 .mat、图片、曲线数据 CSV、CAD、bag、
+  关键完整日志；**默认绝不自动压缩或推送 inbox 文件**，
+  防止私人实验数据被意外上传。
+- 诊断大数据或修改模型时，选择性将所需额外文件加入聊天附件，
+  不必把完整仓库、历史结果全部重复提交。
