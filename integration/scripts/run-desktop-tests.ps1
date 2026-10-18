@@ -113,7 +113,7 @@ $summary = [pscustomobject]@{
     timestamp_utc=(Get-Date).ToUniversalTime().ToString('o')
     git_sha=$head
     overall=$(if ($script:failure) {'FAILED'} elseif ($script:blocked) {'PARTIAL_BLOCKED'} else {'PASS_AVAILABLE_CHECKS'})
-    tests=@($script:rows)
+    tests=$script:rows.ToArray()
     note='PASS_AVAILABLE_CHECKS does not imply MATLAB/ROS2/Gazebo/CAD end-to-end VALID. See each stage.'
 }
 $summary | ConvertTo-Json -Depth 7 | Set-Content -LiteralPath (Join-Path $folder 'summary.json') -Encoding UTF8
