@@ -46,6 +46,19 @@ jobs:
             demo_mode:=true controller_yaml:=/tmp/ir_install/share/industrial_robot_integration/config/controllers.yaml \
             > /tmp/ir_demo.urdf
           python3 integration/tests/validate_expanded_urdf.py /tmp/ir_demo.urdf demo
+          # True URDF->SDF conversion catches missing frames hidden by XML-only checks.
+          gz sdf -p /tmp/ir_demo.urdf > /tmp/ir_converted.sdf
+          python3 - <<'PY'
+          from xml.etree import ElementTree as ET
+          sdf = ET.parse('/tmp/ir_converted.sdf').getroot()
+          model = sdf.find('./model')
+          assert model is not None
+          links = {x.get('name') for x in model.findall('link')}
+          assert 'base_link' in links, f'Gazebo conversion lost base_link: {links}'
+          joints = {x.get('name') for x in model.findall('joint')}
+          assert 'joint1' in joints, f'Gazebo conversion lost joint1: {joints}'
+          print('SDF frame graph structure retained: base_link and joint1')
+          PY
       - name: Launch Gazebo headless and verify actual trajectory feedback
         shell: bash
         run: |
@@ -84,5 +97,6 @@ jobs:
           path: |
             /tmp/ir_gazebo.log
             /tmp/ir_demo.urdf
+            /tmp/ir_converted.sdf
             /tmp/ir_logs
           if-no-files-found: warn

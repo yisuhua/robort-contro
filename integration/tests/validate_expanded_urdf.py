@@ -45,7 +45,7 @@ def validate(path, mode):
         assert controlled == JOINTS, controlled
         assert plugin.attrib['name']=='gz_ros2_control::GazeboSimROS2ControlPlugin'
         assert plugin.find('parameters') is not None
-        assert inertials == 7, inertials
+        assert inertials == 8, inertials
     else:
         assert control is None and plugin is None and inertials == 0
     print('PASS expanded xacro', mode, 'joints',len(joints),'inertials',inertials)

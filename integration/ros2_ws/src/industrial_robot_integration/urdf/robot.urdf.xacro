@@ -39,11 +39,21 @@
   </xacro:macro>
 
   <link name="world"/>
-  <link name="base_link"/>
+  <link name="base_link">
+    <!-- Demo physics needs a real base frame in SDF. No actual CAD inertias inferred. -->
+    <xacro:demo_inertial mass="1.0"/>
+  </link>
   <joint name="world_to_base" type="fixed">
     <parent link="world"/><child link="base_link"/>
     <origin xyz="0 0 0" rpy="0 0 0"/>
   </joint>
+  <!-- Prevent fixed-joint reduction from deleting the base_link SDF frame.
+       Preserve only in Gazebo demo mode; math/zero reference is unchanged. -->
+  <xacro:if value="$(arg demo_mode)">
+    <gazebo reference="world_to_base">
+      <preserveFixedJoint>true</preserveFixedJoint>
+    </gazebo>
+  </xacro:if>
 
   <link name="link1"><xacro:demo_inertial mass="1.0"/></link>
   <joint name="joint1" type="revolute">
