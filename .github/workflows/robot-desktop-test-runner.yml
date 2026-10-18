@@ -1,0 +1,55 @@
+name: robot-desktop-test-runner
+on:
+  pull_request:
+    paths:
+      - 'integration/scripts/*.ps1'
+      - 'integration/scripts/run-wsl-tests.sh'
+      - 'integration/docs/DESKTOP_ONE_CLICK.md'
+      - '.github/workflows/robot-desktop-test-runner.yml'
+  push:
+    branches:
+      - 'feature/matlab-ros2-gazebo-integration'
+    paths:
+      - 'integration/scripts/*.ps1'
+      - 'integration/scripts/run-wsl-tests.sh'
+      - '.github/workflows/robot-desktop-test-runner.yml'
+
+jobs:
+  windows-entrypoint-static:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Parse both PowerShell scripts
+        shell: pwsh
+        run: |
+          $paths = @('integration/scripts/bootstrap-desktop.ps1',
+                     'integration/scripts/run-desktop-tests.ps1')
+          foreach ($path in $paths) {
+            $tok = $null
+            $errs = $null
+            [System.Management.Automation.Language.Parser]::ParseFile(
+              (Resolve-Path $path).Path, [ref]$tok, [ref]$errs) | Out-Null
+            if ($errs.Count -gt 0) { throw "$path PowerShell parser failure: $errs" }
+          }
+      - name: Execute offline runner in explicit CI skip mode (no PC/WSL/MATLAB)
+        shell: pwsh
+        run: |
+          & ./integration/scripts/run-desktop-tests.ps1 -RepoRoot $env:GITHUB_WORKSPACE -SkipWSL -SkipMatlab
+          if ($LASTEXITCODE -ne 0) { throw "Runner returned $LASTEXITCODE" }
+          $s = Get-ChildItem integration/test-results/*/summary.json | Sort-Object FullName -Descending | Select-Object -First 1
+          $j = Get-Content -Raw $s.FullName | ConvertFrom-Json
+          if ($j.overall -ne 'PASS_AVAILABLE_CHECKS') { throw "Incorrect CI result: $($j.overall)" }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: desktop-offline-test-runner-logs
+          path: integration/test-results/
+  bash-parse:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: WSL runner syntax
+        run: bash -n integration/scripts/run-wsl-tests.sh

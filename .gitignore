@@ -1,0 +1,4 @@
+# Generated local test outputs and temporary package artifacts.
+integration/test-results/
+**/__pycache__/
+*.pyc
