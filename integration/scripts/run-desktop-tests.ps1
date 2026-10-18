@@ -117,6 +117,17 @@ $summary = [pscustomobject]@{
     note='PASS_AVAILABLE_CHECKS does not imply MATLAB/ROS2/Gazebo/CAD end-to-end VALID. See each stage.'
 }
 $summary | ConvertTo-Json -Depth 7 | Set-Content -LiteralPath (Join-Path $folder 'summary.json') -Encoding UTF8
+# Generate fixed handoff from ALREADY COLLECTED results: NO extra tests or uploads.
+$handoffWriter = Join-Path $PSScriptRoot 'write-handoff.ps1'
+try {
+    & $handoffWriter -RepoRoot $RepoRoot -RunDirectory $folder
+} catch {
+    Write-Warning ("Handoff generation failed: " + $_.Exception.Message)
+    Record 'handoff-generation' 'FAILED' 1 'See console; existing test logs retained'
+    $summary.overall = 'FAILED'
+    $summary.tests = $script:rows.ToArray()
+    $summary | ConvertTo-Json -Depth 7 | Set-Content -LiteralPath (Join-Path $folder 'summary.json') -Encoding UTF8
+}
 Write-Host "Full test evidence: $folder"
 Write-Host "Overall: $($summary.overall)"
 if ($script:failure) { exit 1 }

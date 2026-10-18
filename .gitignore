@@ -2,3 +2,11 @@
 integration/test-results/
 **/__pycache__/
 *.pyc
+
+# Private, locally generated ChatGPT handoffs and manually collected evidence.
+handoff/LATEST.md
+handoff/LATEST.json
+handoff/history/
+handoff/exports/
+handoff/inbox/*
+!handoff/inbox/.gitkeep

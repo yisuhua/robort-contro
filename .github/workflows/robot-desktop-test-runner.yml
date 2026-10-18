@@ -3,6 +3,8 @@ on:
   pull_request:
     paths:
       - 'integration/scripts/*.ps1'
+      - 'handoff/**'
+      - '.gitignore'
       - 'integration/scripts/run-wsl-tests.sh'
       - 'integration/docs/DESKTOP_ONE_CLICK.md'
       - '.github/workflows/robot-desktop-test-runner.yml'
@@ -11,6 +13,8 @@ on:
       - 'feature/matlab-ros2-gazebo-integration'
     paths:
       - 'integration/scripts/*.ps1'
+      - 'handoff/**'
+      - '.gitignore'
       - 'integration/scripts/run-wsl-tests.sh'
       - '.github/workflows/robot-desktop-test-runner.yml'
 
@@ -26,7 +30,8 @@ jobs:
         shell: pwsh
         run: |
           $paths = @('integration/scripts/bootstrap-desktop.ps1',
-                     'integration/scripts/run-desktop-tests.ps1')
+                     'integration/scripts/run-desktop-tests.ps1',
+                     'integration/scripts/write-handoff.ps1')
           foreach ($path in $paths) {
             $tok = $null
             $errs = $null
@@ -42,11 +47,34 @@ jobs:
           $s = Get-ChildItem integration/test-results/*/summary.json | Sort-Object FullName -Descending | Select-Object -First 1
           $j = Get-Content -Raw $s.FullName | ConvertFrom-Json
           if ($j.overall -ne 'PASS_AVAILABLE_CHECKS') { throw "Incorrect CI result: $($j.overall)" }
+          $hand = Get-Content -Raw handoff/LATEST.json | ConvertFrom-Json
+          if ($hand.git_sha -ne $j.git_sha -or $hand.run_id -ne (Split-Path $s.DirectoryName -Leaf)) {
+            throw "Latest handoff does not point to latest test evidence"
+          }
+          if (!(Test-Path handoff/LATEST.md) -or !(Test-Path handoff/exports/LATEST.zip)) {
+            throw "Fixed handoff missing after test run"
+          }
+          if (!(Test-Path (Join-Path handoff/history ($hand.run_id + '.md')))) {
+            throw "Historical handoff missing"
+          }
+          $entries = [System.IO.Compression.ZipFile]::OpenRead((Resolve-Path handoff/exports/LATEST.zip).Path)
+          try {
+            $names = @($entries.Entries | ForEach-Object Name)
+            if ($names -notcontains 'LATEST.md' -or $names -notcontains 'LATEST.json' -or $names.Count -ne 2) {
+              throw "Handoff ZIP content contract failed: $names"
+            }
+          } finally { $entries.Dispose() }
+          $dirty = @(git status --porcelain)
+          if ($dirty.Count -gt 0) { throw "Generated handoffs must not dirty git: $dirty" }
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: desktop-offline-test-runner-logs
-          path: integration/test-results/
+          path: |
+            integration/test-results/
+            handoff/LATEST.md
+            handoff/LATEST.json
+            handoff/exports/LATEST.zip
   bash-parse:
     runs-on: ubuntu-24.04
     steps:

@@ -104,3 +104,15 @@ NTFS Desktop 上以避免跨系统符号链接/权限问题。
 
 **不要**将 `integration/ros2_ws` 与真实硬件 ROS_DOMAIN_ID 共享。
 WSL demo 默认隔离至 ROS_DOMAIN_ID=143，消息在本机 localhost 范围内。
+
+## 固定 ChatGPT 交付入口（新）
+
+完整测试后会自动刷新项目下的 `handoff/LATEST.md`、`LATEST.json`、
+`handoff/history/<run_id>.md/json` 和可手动上传的
+`handoff/exports/LATEST.zip`。原始完整日志依旧放在
+`integration/test-results/<run_id>/`。额外图片、实验记录放在
+`handoff/inbox/`，不会自动上传或进入 GitHub。
+
+下次对话只要上传 `handoff/exports/LATEST.zip`，需要逐行日志时再补充
+对应 .log 文件。自动交付并不意味着 ChatGPT 能直接读取用户本地磁盘。
+完整约定见 `handoff/README.md`。
