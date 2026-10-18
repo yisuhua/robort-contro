@@ -1,0 +1,33 @@
+name: robot-integration-xacro
+on:
+  pull_request:
+    paths:
+      - 'integration/**'
+      - '.github/workflows/robot-integration-xacro.yml'
+  push:
+    branches:
+      - 'feature/matlab-ros2-gazebo-integration'
+    paths:
+      - 'integration/**'
+      - '.github/workflows/robot-integration-xacro.yml'
+
+jobs:
+  xacro-expansion:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install pinned Xacro interpreter (hosted runner only)
+        run: python -m pip install xacro==2.1.1
+      - name: Expand and check kinematic-only and DEMO Xacro
+        shell: bash
+        run: |
+          set -euo pipefail
+          XACRO=integration/ros2_ws/src/industrial_robot_integration/urdf/robot.urdf.xacro
+          xacro "$XACRO" demo_mode:=false > /tmp/robot_kinematic.urdf
+          python integration/tests/validate_expanded_urdf.py /tmp/robot_kinematic.urdf kinematic
+          xacro "$XACRO" demo_mode:=true controller_yaml:=/tmp/controllers.yaml > /tmp/robot_demo.urdf
+          python integration/tests/validate_expanded_urdf.py /tmp/robot_demo.urdf demo
+          echo "Xacro expansion/structural checks only: ROS2/Gazebo/MATLAB runtime NOT RUN."
