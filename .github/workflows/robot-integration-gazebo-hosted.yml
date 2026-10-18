@@ -1,0 +1,87 @@
+name: robot-integration-gazebo-hosted
+# Hosted GitHub Linux container only. Does NOT connect to any user's PC.
+on:
+  pull_request:
+    paths:
+      - 'integration/**'
+      - '.github/workflows/robot-integration-gazebo-hosted.yml'
+  workflow_dispatch:
+
+jobs:
+  hosted-jazzy-smoke:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    container:
+      image: ros:jazzy-ros-base
+    env:
+      ROS_DISTRO: jazzy
+      RMW_IMPLEMENTATION: rmw_fastrtps_cpp
+      CI: true
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install ROS/Gazebo test dependencies INSIDE ephemeral container
+        shell: bash
+        run: |
+          set -euo pipefail
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            python3-colcon-common-extensions \
+            ros-jazzy-ros-gz-sim ros-jazzy-ros-gz-bridge \
+            ros-jazzy-gz-ros2-control \
+            ros-jazzy-robot-state-publisher ros-jazzy-xacro \
+            ros-jazzy-joint-state-broadcaster \
+            ros-jazzy-joint-trajectory-controller \
+            ros-jazzy-controller-manager
+      - name: Build ament package and expand Xacro
+        shell: bash
+        run: |
+          set -euo pipefail
+          source /opt/ros/jazzy/setup.bash
+          colcon build --base-paths integration/ros2_ws/src \
+            --build-base /tmp/ir_build --install-base /tmp/ir_install \
+            --log-base /tmp/ir_logs
+          source /tmp/ir_install/setup.bash
+          ros2 pkg prefix industrial_robot_integration
+          xacro integration/ros2_ws/src/industrial_robot_integration/urdf/robot.urdf.xacro \
+            demo_mode:=true controller_yaml:=/tmp/ir_install/share/industrial_robot_integration/config/controllers.yaml \
+            > /tmp/ir_demo.urdf
+          python3 integration/tests/validate_expanded_urdf.py /tmp/ir_demo.urdf demo
+      - name: Launch Gazebo headless and verify actual trajectory feedback
+        shell: bash
+        run: |
+          set -euo pipefail
+          source /opt/ros/jazzy/setup.bash
+          source /tmp/ir_install/setup.bash
+          ros2 launch industrial_robot_integration demo.launch.py > /tmp/ir_gazebo.log 2>&1 &
+          GZ_PID=$!
+          trap 'kill "$GZ_PID" 2>/dev/null || true' EXIT
+          READY=0
+          for i in $(seq 1 90); do
+            if ! kill -0 "$GZ_PID" 2>/dev/null; then
+              echo "Gazebo launch exited prematurely"
+              break
+            fi
+            if ros2 control list_controllers 2>/dev/null | grep -q 'joint_trajectory_controller.*active' && \
+               ros2 control list_controllers 2>/dev/null | grep -q 'joint_state_broadcaster.*active'; then
+              READY=1
+              break
+            fi
+            sleep 2
+          done
+          if [ "$READY" -ne 1 ]; then
+            tail -n 200 /tmp/ir_gazebo.log || true
+            exit 1
+          fi
+          timeout 40 ros2 run industrial_robot_integration feedback_probe --samples 10 --timeout 30
+          timeout 45 ros2 run industrial_robot_integration command_probe
+          echo "ROS 2/Gazebo hosted DEMO roundtrip observed; MATLAB/CAD NOT RUN"
+      - name: Preserve trial logs even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: industrial-robot-gazebo-hosted-logs
+          path: |
+            /tmp/ir_gazebo.log
+            /tmp/ir_demo.urdf
+            /tmp/ir_logs
+          if-no-files-found: warn
