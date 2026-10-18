@@ -23,5 +23,6 @@ setup(
     license='MIT',
     entry_points={'console_scripts': [
         'feedback_probe = industrial_robot_integration.feedback_probe:main',
+        'command_probe = industrial_robot_integration.command_probe:main',
     ]},
 )

@@ -37,9 +37,8 @@ jobs:
         run: |
           set -euo pipefail
           source /opt/ros/jazzy/setup.bash
-          colcon build --base-paths integration/ros2_ws/src \
-            --build-base /tmp/ir_build --install-base /tmp/ir_install \
-            --log-base /tmp/ir_logs
+          colcon --log-base /tmp/ir_logs build --base-paths integration/ros2_ws/src \
+            --build-base /tmp/ir_build --install-base /tmp/ir_install
           source /tmp/ir_install/setup.bash
           ros2 pkg prefix industrial_robot_integration
           xacro integration/ros2_ws/src/industrial_robot_integration/urdf/robot.urdf.xacro \

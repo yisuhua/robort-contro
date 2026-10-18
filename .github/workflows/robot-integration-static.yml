@@ -22,7 +22,8 @@ jobs:
           python3 -m py_compile \
             integration/ros2_ws/src/industrial_robot_integration/launch/demo.launch.py \
             integration/ros2_ws/src/industrial_robot_integration/industrial_robot_integration/feedback_probe.py \
-            integration/ros2_ws/src/industrial_robot_integration/setup.py
+            integration/ros2_ws/src/industrial_robot_integration/setup.py \
+            integration/ros2_ws/src/industrial_robot_integration/industrial_robot_integration/command_probe.py
           bash -n integration/scripts/*.sh
       - name: Clearly declare scope
         run: echo "Static math/contract checks only; MATLAB, ROS 2, Gazebo, CAD and hardware NOT RUN."
