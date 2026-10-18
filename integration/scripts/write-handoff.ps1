@@ -91,12 +91,12 @@ $md = @(
     ''
     "> 每次本地测试后更新；仅代表当次执行证据，不表示整套机器人系统已经通过。"
     ''
-    "- 项目：`yisuhua/robort-contro`"
-    "- 运行 ID：`$runId`"
-    "- UTC：`$($handoffData.generated_utc)`"
-    "- Git SHA：`$($handoffData.git_sha)`"
-    "- 总状态：**$($handoffData.overall)**"
-    "- 原始证据：`$relativeRun/`（本地保存，不自动推送）"
+    '- 项目：yisuhua/robort-contro'
+    ('- 运行 ID：{0}' -f $runId)
+    ('- UTC：{0}' -f $handoffData.generated_utc)
+    ('- Git SHA：{0}' -f $handoffData.git_sha)
+    ('- 总状态：**{0}**' -f $handoffData.overall)
+    ('- 原始证据：{0}/（本地保存，不自动推送）' -f $relativeRun)
     ''
     '## 各阶段状态'
     ''
