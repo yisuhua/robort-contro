@@ -1,0 +1,29 @@
+name: robot-integration-static
+on:
+  pull_request:
+    paths:
+      - 'integration/**'
+      - 'matlab/robot_model/build_robot.m'
+      - '.github/workflows/robot-integration-static.yml'
+  push:
+    branches:
+      - 'feature/matlab-ros2-gazebo-integration'
+    paths:
+      - 'integration/**'
+      - '.github/workflows/robot-integration-static.yml'
+jobs:
+  offline-contract:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Python static and FK tests (NO ROS/Gazebo runtime)
+        run: |
+          python3 -m unittest discover -s integration/tests -p 'test_*.py' -v
+          python3 -m py_compile \
+            integration/ros2_ws/src/industrial_robot_integration/launch/demo.launch.py \
+            integration/ros2_ws/src/industrial_robot_integration/industrial_robot_integration/feedback_probe.py \
+            integration/ros2_ws/src/industrial_robot_integration/setup.py \
+            integration/ros2_ws/src/industrial_robot_integration/industrial_robot_integration/command_probe.py
+          bash -n integration/scripts/*.sh
+      - name: Clearly declare scope
+        run: echo "Static math/contract checks only; MATLAB, ROS 2, Gazebo, CAD and hardware NOT RUN."

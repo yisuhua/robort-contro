@@ -1,0 +1,143 @@
+name: robot-desktop-test-runner
+on:
+  pull_request:
+    paths:
+      - 'integration/scripts/*.ps1'
+      - 'handoff/**'
+      - '.gitignore'
+      - 'integration/scripts/run-wsl-tests.sh'
+      - 'integration/docs/DESKTOP_ONE_CLICK.md'
+      - '.github/workflows/robot-desktop-test-runner.yml'
+  push:
+    branches:
+      - 'feature/matlab-ros2-gazebo-integration'
+    paths:
+      - 'integration/scripts/*.ps1'
+      - 'handoff/**'
+      - '.gitignore'
+      - 'integration/scripts/run-wsl-tests.sh'
+      - '.github/workflows/robot-desktop-test-runner.yml'
+
+jobs:
+  windows-entrypoint-static:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Parse both PowerShell scripts
+        shell: pwsh
+        run: |
+          $paths = @('integration/scripts/bootstrap-desktop.ps1',
+                     'integration/scripts/run-desktop-tests.ps1',
+                     'integration/scripts/write-handoff.ps1')
+          foreach ($path in $paths) {
+            $tok = $null
+            $errs = $null
+            [System.Management.Automation.Language.Parser]::ParseFile(
+              (Resolve-Path $path).Path, [ref]$tok, [ref]$errs) | Out-Null
+            if ($errs.Count -gt 0) { throw "$path PowerShell parser failure: $errs" }
+          }
+      - name: Check UTF-8 BOM for Windows PowerShell 5.1 source decoding
+        shell: pwsh
+        run: |
+          $path = 'integration/scripts/write-handoff.ps1'
+          $bytes = [System.IO.File]::ReadAllBytes((Resolve-Path $path).Path)
+          if ($bytes.Length -lt 3 -or $bytes[0] -ne 0xEF -or $bytes[1] -ne 0xBB -or $bytes[2] -ne 0xBF) {
+            throw "Missing UTF-8 BOM on Chinese-language .ps1: Windows PowerShell 5.1 will misparse it"
+          }
+          & powershell.exe -NoProfile -ExecutionPolicy Bypass -Command {
+            $tokens = $null
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile(
+              'integration/scripts/write-handoff.ps1', [ref]$tokens, [ref]$errors) | Out-Null
+            if ($errors.Count -ne 0) { throw "Windows PowerShell 5.1 parser errors: $errors" }
+          }
+          if ($LASTEXITCODE -ne 0) { throw "Legacy Windows PowerShell syntax check failed" }
+      - name: Execute offline runner in explicit CI skip mode (no PC/WSL/MATLAB)
+        shell: pwsh
+        run: |
+          & ./integration/scripts/run-desktop-tests.ps1 -RepoRoot $env:GITHUB_WORKSPACE -SkipWSL -SkipMatlab
+          if ($LASTEXITCODE -ne 0) { throw "Runner returned $LASTEXITCODE" }
+          $s = Get-ChildItem integration/test-results/*/summary.json | Sort-Object FullName -Descending | Select-Object -First 1
+          $j = Get-Content -Raw $s.FullName | ConvertFrom-Json
+          if ($j.overall -ne 'PASS_AVAILABLE_CHECKS') { throw "Incorrect CI result: $($j.overall)" }
+          $hand = Get-Content -Raw handoff/LATEST.json | ConvertFrom-Json
+          if ($hand.git_sha -ne $j.git_sha -or $hand.run_id -ne (Split-Path $s.DirectoryName -Leaf)) {
+            throw "Latest handoff does not point to latest test evidence"
+          }
+          if (!(Test-Path handoff/LATEST.md) -or !(Test-Path handoff/exports/LATEST.zip)) {
+            throw "Fixed handoff missing after test run"
+          }
+          if (!(Test-Path (Join-Path handoff/history ($hand.run_id + '.md')))) {
+            throw "Historical handoff missing"
+          }
+          $entries = [System.IO.Compression.ZipFile]::OpenRead((Resolve-Path handoff/exports/LATEST.zip).Path)
+          try {
+            $names = @($entries.Entries | ForEach-Object Name)
+            if ($names -notcontains 'LATEST.md' -or $names -notcontains 'LATEST.json' -or
+                $names -notcontains 'FILES.md' -or $names -notcontains 'MANIFEST.json' -or
+                $names -notcontains 'build_robot.m' -or
+                $names -notcontains 'robot.urdf.xacro' -or
+                $names -notcontains 'failure-excerpts.txt') {
+              throw "Handoff ZIP content contract failed: $names"
+            }
+          } finally { $entries.Dispose() }
+          $staging = Join-Path $env:RUNNER_TEMP 'handoff-check'
+          New-Item -ItemType Directory -Path $staging -Force | Out-Null
+          try {
+            Expand-Archive -LiteralPath handoff/exports/LATEST.zip -DestinationPath $staging -Force
+            $manifest = Get-Content -LiteralPath (Join-Path $staging 'MANIFEST.json') -Raw | ConvertFrom-Json
+            if ($manifest.git_sha -ne $j.git_sha -or $manifest.source_count -lt 10) {
+              throw "Handoff manifest version/source contract mismatch"
+            }
+            $model = Join-Path $staging 'sources/matlab/robot_model/build_robot.m'
+            if (!(Test-Path -LiteralPath $model)) { throw "Required MATLAB model absent from package" }
+            if ((Get-FileHash $model -Algorithm SHA256).Hash -ne
+                (Get-FileHash matlab/robot_model/build_robot.m -Algorithm SHA256).Hash) {
+              throw "Bundled model does not match the current repository input"
+            }
+            $packagedNames = @(Get-ChildItem $staging -File -Recurse | ForEach-Object Name)
+            if ($packagedNames -contains '.env' -or $packagedNames -contains '.git') {
+              throw 'Forbidden private data included in package'
+            }
+          } finally { Remove-Item $staging -Recurse -Force -ErrorAction SilentlyContinue }
+          $dirty = @(git status --porcelain)
+          if ($dirty.Count -gt 0) { throw "Generated handoffs must not dirty git: $dirty" }
+      - name: Windows PowerShell 5.1 regenerate handoff without rerunning tests
+        shell: pwsh
+        run: |
+          $s = Get-ChildItem integration/test-results/*/summary.json | Sort-Object FullName -Descending | Select-Object -First 1
+          if (!$s) { throw 'Expected pre-existing test summary' }
+          & powershell.exe -NoProfile -ExecutionPolicy Bypass -File integration/scripts/write-handoff.ps1 -RepoRoot $env:GITHUB_WORKSPACE -RunDirectory $s.DirectoryName
+          if ($LASTEXITCODE -ne 0) { throw "Windows PowerShell 5.1 regeneration failed: $LASTEXITCODE" }
+          $hand = Get-Content -Raw handoff/LATEST.json | ConvertFrom-Json
+          if ($hand.run_id -ne (Split-Path $s.DirectoryName -Leaf)) {
+            throw 'Legacy Windows PowerShell report did not retain original run id'
+          }
+          $zipPath = 'handoff/exports/LATEST.zip'
+          if (!(Test-Path $zipPath)) { throw 'Legacy Windows PowerShell failed to produce ZIP' }
+          $zip = [System.IO.Compression.ZipFile]::OpenRead((Resolve-Path $zipPath).Path)
+          try {
+            $n = @($zip.Entries | ForEach-Object FullName)
+            foreach ($expected in @('LATEST.md','LATEST.json','MANIFEST.json','FILES.md')) {
+              if ($n -notcontains $expected) { throw "Windows PowerShell 5.1 ZIP missing $expected" }
+            }
+          } finally { $zip.Dispose() }
+          if (@(git status --porcelain).Count -gt 0) { throw 'Regenerated outputs changed Git workspace' }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: desktop-offline-test-runner-logs
+          path: |
+            integration/test-results/
+            handoff/LATEST.md
+            handoff/LATEST.json
+            handoff/exports/LATEST.zip
+  bash-parse:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: WSL runner syntax
+        run: bash -n integration/scripts/run-wsl-tests.sh
