@@ -1,4 +1,4 @@
-# Generate a stable, privacy-conscious handoff after EACH local test run.
+﻿# Generate a stable, privacy-conscious handoff after EACH local test run.
 # No network, Git commits, uploads, automatic retries, or additional tests.
 [CmdletBinding()]
 param(
